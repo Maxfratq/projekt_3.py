@@ -33,11 +33,10 @@ def get_region_data(region_url):
 
     municipalities = []
     rows = table.find_all('tr')
-    # První řádek obvykle obsahuje hlavičku, proto začínáme od indexu 1
     for row in rows[1:]:
         cols = row.find_all('td')
         if len(cols) < 6:
-            continue  # přeskočíme řádky bez všech potřebných sloupců
+            continue 
 
         code_link = cols[0].find('a')
         if code_link:
@@ -52,7 +51,6 @@ def get_region_data(region_url):
         obalky = cols[3].text.strip().replace('\xa0', '').replace(' ', '')
         platne = cols[4].text.strip().replace('\xa0', '').replace(' ', '')
 
-        # Upravíme odkaz na detail, pokud je relativní
         if detail_href and detail_href.startswith('?'):
             detail_url = "https://www.volby.cz/pls/ps2017nss/" + detail_href
         else:
@@ -123,22 +121,18 @@ def write_csv(municipalities, filename, all_parties):
             writer.writerow(row)
 
 def main():
-    # Ověření, zda byly zadány správné argumenty: URL a název CSV souboru
     if len(sys.argv) != 3:
         print("Použití: python projekt_3.py <URL_územního_celeku> <výstupní_csv>")
         sys.exit(1)
 
     region_url = sys.argv[1]
     output_csv = sys.argv[2]
-
-    # Získáme seznam obcí z daného územního celku
     municipalities = get_region_data(region_url)
     if not municipalities:
         print("Nebyla nalezena žádná data o obcích.")
         sys.exit(1)
 
     all_parties = set()
-    # Pro každou obec stáhneme detailní výsledky hlasování
     for mun in municipalities:
         detail_url = mun.get('detail_url')
         if detail_url:
@@ -148,7 +142,6 @@ def main():
         else:
             mun['parties'] = {}
 
-    # Uložíme získaná data do CSV souboru
     write_csv(municipalities, output_csv, all_parties)
     print("Data byla úspěšně uložena do souboru", output_csv)
 
