@@ -9,132 +9,122 @@ discord: maximrtop
 import sys
 import csv
 import requests
-import bs4
+from bs4 import BeautifulSoup
 
-voters = []
-attendance = []
-valid_ones = []
 
-def getr(link):
-    """Uložení HTML z adresy v argumentu. Vrací třídu BeautifulSoup"""
-    geter = requests.get(link)
-    html = bs4.BeautifulSoup(geter.text, "html.parser")
-    print("STAHUJI DATA Z URL:", link)
-    return html
+volici = []
+obalky = []
+platne_hlasy = []
 
-# Skript nyní očekává jeden argument – URL adresa
+def nacti_stranku(url):
+    
+    odpoved = requests.get(url)
+    stranka = BeautifulSoup(odpoved.text, "html.parser")
+    print("STAHUJI DATA Z URL:", url)
+    return stranka
+
+
 if len(sys.argv) == 2:
-    hateemel = getr(sys.argv[1])  # uložení HTML do proměnné pro opakované využití
-    file_name = "volby.csv"       # výstupní soubor bude volby.csv
+    region_stranka = nacti_stranku(sys.argv[1])
+    vystupni_soubor = "volby.csv"  # Výstupní soubor bude volby.csv
 else:
-    print('Zadal jsi nesprávný počet argumentů. Použij: python projekt_3.py "URL_adresa"')
-    quit()
+    print('Chyba: Zadejte přesně jeden argument (URL adresu). Použijte: python projekt_3.py "URL_adresa"')
+    sys.exit(1)
 
-def get_towns() -> list:
-    """Vrací seznam měst v daném okrese"""
-    towns = []
-    towns_search = hateemel.find_all("td", "overflow_name")
-    for t in towns_search:
-        towns.append(t.text)
-    return towns
+def ziskej_nazvy_obci():
+    
+    nazvy = []
+    bunky = region_stranka.find_all("td", class_="overflow_name")
+    for bunka in bunky:
+        nazvy.append(bunka.text)
+    return nazvy
 
-def get_links() -> list:
-    """Vrací URL adresu k získání detailů jednotlivých obcí požadovaného okresu"""
-    path = []
-    link_search = hateemel.find_all("td", "cislo", "href")
-    for link_town in link_search:
-        link_town = link_town.a["href"]
-        path.append(f"https://volby.cz/pls/ps2017nss/{link_town}")
-    return path
+def ziskej_detailni_url():
+   
+    url_list = []
+    bunky = region_stranka.find_all("td", class_="cislo", href=True)
+    for bunka in bunky:
+        relativni_odkaz = bunka.a["href"]
+        cela_url = "https://volby.cz/pls/ps2017nss/" + relativni_odkaz
+        url_list.append(cela_url)
+    return url_list
 
-def get_id() -> list:
-    """Vrací identifikační čísla jednotlivých obcí"""
-    town_id = []
-    ids = hateemel.find_all("td", "cislo")
-    for i in ids:
-        town_id.append(i.text)
-    return town_id
+def ziskej_id_obci():
+   
+    id_list = []
+    bunky = region_stranka.find_all("td", class_="cislo")
+    for bunka in bunky:
+        id_list.append(bunka.text)
+    return id_list
 
-def collect_parties() -> list:
-    """Vrací seznam kandidujících stran v daném okresu"""
-    parties = []
-    town_link = get_links()
-    html = requests.get(town_link[0])
-    html_villages = bs4.BeautifulSoup(html.text, "html.parser")
-    party = html_villages.find_all("td", "overflow_name")
-    for p in party:
-        parties.append(p.text)
-    return parties
+def ziskej_nazvy_stran():
+   
+    detailni_url = ziskej_detailni_url()
+    if len(detailni_url) == 0:
+        return []
+    odpoved = requests.get(detailni_url[0])
+    detail_stranka = BeautifulSoup(odpoved.text, "html.parser")
+    strany = []
+    bunky = detail_stranka.find_all("td", class_="overflow_name")
+    for bunka in bunky:
+        strany.append(bunka.text)
+    return strany
 
-def get_voters_sum() -> None:
-    """Modifikační funkce, která do globálních proměnných
-    voters, attendance a valid_ones přidává údaje pro jednotlivé obce."""
-    path = get_links()
-    for p in path:
-        html_path = requests.get(p)
-        html_village = bs4.BeautifulSoup(html_path.text, "html.parser")
-        voter = html_village.find_all("td", headers="sa2")
-        for v in voter:
-            voters.append(v.text.replace('\xa0', ' '))
-        attend = html_village.find_all("td", headers="sa3")
-        for a in attend:
-            attendance.append(a.text.replace('\xa0', ' '))
-        correct = html_village.find_all("td", headers="sa6")
-        for c in correct:
-            valid_ones.append(c.text.replace('\xa0', ' '))
+def sesbir_data_volicu():
+  
+    url_list = ziskej_detailni_url()
+    for url in url_list:
+        odpoved = requests.get(url)
+        detail_stranka = BeautifulSoup(odpoved.text, "html.parser")
+        bunky = detail_stranka.find_all("td", headers="sa2")
+        for bunka in bunky:
+            volici.append(bunka.text.replace('\xa0', ' '))
+        bunky = detail_stranka.find_all("td", headers="sa3")
+        for bunka in bunky:
+            obalky.append(bunka.text.replace('\xa0', ' '))
+        bunky = detail_stranka.find_all("td", headers="sa6")
+        for bunka in bunky:
+            platne_hlasy.append(bunka.text.replace('\xa0', ' '))
 
-def collect_votes() -> list:
-    """Vrací list listů, kde každý vnitřní list obsahuje procentuální výsledky hlasů
-    pro jednotlivé politické strany v každé obci."""
-    links = get_links()
-    votes = []
-    for li in links:
-        html = getr(li)
-        votes_search = html.find_all("td", "cislo", headers=["t1sb4", "t2sb4"])
-        temporary = []
-        for v in votes_search:
-            temporary.append(v.text + ' %')
-        votes.append(temporary)
-    return votes
+def ziskej_procenta_hlasu():
+   
+    vsechna_procenta = []
+    url_list = ziskej_detailni_url()
+    for url in url_list:
+        stranka = nacti_stranku(url)
+        procenta = []
+        bunky = stranka.find_all("td", class_="cislo", headers=["t1sb4", "t2sb4"])
+        for bunka in bunky:
+            procenta.append(bunka.text + " %")
+        vsechna_procenta.append(procenta)
+    return vsechna_procenta
 
-def whiterows_creator() -> list:
-    """Pomocná funkce pro tvorbu CSV souboru.
-    Vrací list řádků, kde každý řádek obsahuje:
-    ID obce, název obce, registrovaní voliči, vydané obálky, platné hlasy
-    a procentuální výsledky hlasů kandidujících stran."""
-    rows = []
-    get_voters_sum()
-    towns = get_towns()
-    ids = get_id()
-    votes = collect_votes()
-    zipped = zip(ids, towns, voters, attendance, valid_ones)
-    aux_var = []
-    for i, t, v, a, vo in zipped:
-        aux_var.append([i, t, v, a, vo])
-    zip_all = zip(aux_var, votes)
-    for av, vs in zip_all:
-        rows.append(av + vs)
-    return rows
+def vytvor_radky_csv():
+   
+    radky = []
+    sesbir_data_volicu()
+    nazvy_obci = ziskej_nazvy_obci()
+    id_obci = ziskej_id_obci()
+    hlasovani = ziskej_procenta_hlasu()
+    zakladni_udaje = list(zip(id_obci, nazvy_obci, volici, obalky, platne_hlasy))
+    for udaje, procenta in zip(zakladni_udaje, hlasovani):
+        radek = list(udaje) + procenta
+        radky.append(radek)
+    return radky
 
-def election2017(link, file) -> None:
-    """Hlavní funkce, která pomocí výše uvedených funkcí vytváří CSV soubor
-    s volebními výsledky."""
-    try:
-        header = ['Kód obce', 'Název obce', 'Voliči v seznamu', 'Vydané obálky', 'Platné hlasy']
-        content = whiterows_creator()
-        parties = collect_parties()
-        print("UKLÁDÁM DATA DO SOUBORU:", file)
-        for party in parties:
-            header.append(party)
-        with open(file, 'w', newline='', encoding='utf-8') as f:
-            f_writer = csv.writer(f)
-            f_writer.writerow(header)
-            f_writer.writerows(content)
-        print("UKONČUJI:", sys.argv[0])
-    except IndexError:
-        print("Nastala chyba. Nejspíš máte špatný odkaz nebo jste jej zapomněli dát do uvozovek.")
-        quit()
+def main():
+   
+    hlavicka = ['Kód obce', 'Název obce', 'Voliči v seznamu', 'Vydané obálky', 'Platné hlasy']
+    radky_csv = vytvor_radky_csv()
+    strany = ziskej_nazvy_stran()
+    for strana in strany:
+        hlavicka.append(strana)
+    print("UKLÁDÁM DATA DO SOUBORU:", vystupni_soubor)
+    with open(vystupni_soubor, 'w', newline='', encoding='utf-8') as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(hlavicka)
+        writer.writerows(radky_csv)
+    print("UKONČUJI:", sys.argv[0])
 
 if __name__ == '__main__':
-    address = sys.argv[1]
-    election2017(address, file_name)
+    main()
